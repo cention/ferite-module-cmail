@@ -11,7 +11,7 @@ if NEED_FERITE_LIB
 libferite = -L${top_builddir}/src -lferite
 endif
 
-LDFLAGS          = -L${libdir} @mail_LIBS@ $(libferite) -lssl
+LDFLAGS          = -L${libdir} @mail_LIBS@ $(libferite) -Wl,-lc-client -Wl,-lssl -Wl,-lcrypto -Wl,-lcrypt -Wl,-lferite
 INCLUDES         = -I$(top_srcdir)/include -I$(prefix)/include -I$(prefix)/include/imap -I. @mail_CFLAGS@
 DEFS             = @pthread_defs@
 
@@ -44,7 +44,6 @@ cmail_la_SOURCES    = \
 	imap_utility.h \
 	tingeling.c
 cmail_la_LDFLAGS    = -no-undefined -module -avoid-version
-cmail_la_LIBADD     = -lc-client -lssl -lcrypto @gss@
 
 cmail_core.c: @MODULE_SRC_PREFIX@/mail/cmail.fec
 	@BUILDER@ -m cmail @MODULE_SRC_PREFIX@/mail/cmail.fec
