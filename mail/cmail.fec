@@ -121,6 +121,8 @@ namespace modifies Mail {
 
 		if( type == 'IBM01142' ) {
 			type = 'CP01142';
+		} else if( type and ( type.toLower() == 'ks_c_5601-1987' or type.toLower() == 'ks_c_5601-1989' )) {
+			type = 'EUC-KR';
 		}
 
 		if( not type or type.toLower() == 'x-unknown' ) {
@@ -155,6 +157,10 @@ namespace modifies Mail {
 		}
 		return content;
 	}
+
+	string searchDecoding = '[=?]+(iso-.*?|utf-8|koi8-r|windows-.*?|x-unknown|us-ascii)[?](.)[?](.*?)\?=';
+	string search_eurkr = '[=?]+(ks_c_5601-.+?)[?](.)[?](.*?)\?=';
+
 	/**
 	 * @function canDecodeISOString
 	 * @declaration function canDecodeISOString( string str )
@@ -163,11 +169,12 @@ namespace modifies Mail {
 	 * @return true if the string can be fixed, false otherwise
 	 */
 	function canDecodeISOString( string str ) {
-		object o = new Regexp( '[=?]+(iso-.*?|utf-8|koi8-r|windows-.*?|x-unknown|us-ascii)[?](.)[?](.*?)\?=', "i" );
+		object o = new Regexp(.searchDecoding, "i");
 		object o2 = new Regexp( '(iso-.*?)[\']{2}(.*)', "i" );
+		object o3 = new Regexp(.search_eurkr, "i");
 
 		str = Regexp.replaceAll( '\n', str, '' );
-		if( o.match( str ) or o2.match( str ) ) {
+		if(o.match(str) or o2.match(str) or o3.match(str)) {
 			return true;
 		}
 		return false;
@@ -181,8 +188,9 @@ namespace modifies Mail {
 	 */
 	function decodeISOString( string str ) {
 		string nstr;
-		object o = new Regexp( '[=?]+(iso-.*?|utf-8|koi8-r|windows-.*?|x-unknown|us-ascii)[?](.)[?](.*?)\?=', "i" );
+		object o = new Regexp(.searchDecoding, "i");
 		object o2 = new Regexp( '(iso-.*?)[\']{2}(.*)', "i" );
+		object o3 = new Regexp(.search_eurkr, "i");
 		number currentIndex = 0;
 
 		str = Regexp.replaceAll( '\n', str, '' );
@@ -218,6 +226,33 @@ namespace modifies Mail {
 			match = o2.match( str );
 			str = Regexp.replaceAll( '%', str, '=' );
 			return .convertToDefaultEncodingFrom(Mail.Connection.qprint(match.capture(1)),match.capture(0));
+		}
+		else if(o3.match(str)) {
+			string charset;
+			// loop all the pattern with =?xx?x?xxx?=
+			// some email headers has multiple of this pattern in
+			// one header
+			o3.matchAll(str) using (match) {
+				// get the first charset
+				if(not charset) {
+					charset = match.capture(0);
+				}
+				// get whatever prefix the match
+				if(match.span()[0] != currentIndex)
+					nstr += str[currentIndex..(match.span()[0]-1)];
+				// decode according to content transfer encoding
+				if(String.compareNoCase(match.capture(1), "q"))
+					nstr += Mail.Connection.qprint(match.capture(2));
+				else if(String.compareNoCase( match.capture(1), "b"))
+					nstr += Mail.Connection.base64(match.capture(2));
+				else
+					nstr += match.capture(2);
+				currentIndex = match.span()[1];
+			};
+			if(currentIndex < String.length(str))
+				nstr += str[currentIndex..];
+			nstr = Regexp.replaceAll('_', nstr, ' ');
+			return .convertToDefaultEncodingFrom(nstr, charset);
 		}
 		return str;
 	}
